@@ -1,0 +1,5 @@
+{
+    "graphiteUrl": "sample.png?",
+    "dashboardListUrl": "config/sample-index.json",
+    "dashboardUrlTemplate": "config/${dashboardId}.json"
+}
