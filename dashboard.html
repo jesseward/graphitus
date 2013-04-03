@@ -3,18 +3,38 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="stylesheet" href="css/jquery-ui.css" type="text/css" />
 <link href="css/bootstrap-combined.min.css" rel="stylesheet">
 <link href="css/bootstrap-responsive.min.css" rel="stylesheet">
-<link href="css/graphite.css" rel="stylesheet">
+<link href="css/font-awesome.css" rel="stylesheet">
+<link rel="stylesheet" href="css/jquery-ui.css" type="text/css" />
+<link href="css/select2.css" rel="stylesheet">
+<link href="css/bootstrap-lightbox.min.css" rel="stylesheet">
+<link href="css/rickshaw.min.css" rel="stylesheet">
+<link type="text/css" rel="stylesheet" href="css/graphitus.css">
+<link type="text/css" rel="stylesheet" href="css/graph.css">
+<link type="text/css" rel="stylesheet" href="css/detail.css">
+<link type="text/css" rel="stylesheet" href="css/legend.css">
+<link type="text/css" rel="stylesheet" href="css/extensions.css">
+
 <script type="text/javascript" src="js/jquery.min.js"></script>
 <script type="text/javascript" src="js/jquery-ui.min.js"></script>
 <script type="text/javascript" src="js/underscore-min.js"></script>
+<script type="text/javascript" src="js/select2.min.js"></script>
+<script type="text/javascript" src="js/jquery.cookie.min.js"></script>
+<script type="text/javascript" src="js/d3.v3.min.js"></script>
+<script type="text/javascript" src="js/rickshaw.min.js"></script>
+<script src="js/bootstrap.min.js"></script>
+<script src="js/bootstrap-lightbox.min.js"></script>
+<script src="js/moment.min.js "></script>
+
 <script type="text/javascript" src="js/jquery-ui-timepicker-addon.min.js"></script>
+<script type="text/javascript" src="js/jquery.waitforimages.min.js"></script>
 <script type="text/javascript" src="js/common.js"></script>
 <script type="text/javascript" src="js/dashboard.js"></script>
 <script type="text/javascript" src="js/jquery.waitforimages.min.js"></script>
 <script src="js/bootstrap.min.js"></script>
+<script type="text/javascript" src="js/extensions.js"></script>
+<script type="text/javascript" src="js/extended-graph.js"></script>
 
 <script type="text/javascript" charset="utf-8">
 $(document).ready(function() {
@@ -27,18 +47,48 @@ $(document).ready(function() {
     <% for(col=0; col<config.columns; col++) { %>
 		<% if( (idx % config.columns) == col) { %>
         <div id="item<%=idx%>" class="well span<%=12/config.columns%>" style="width:<%=config.width%>px">
-			<h4 class="pull-left" style="margin: 0px;"><%=config.data[idx].title%></h4>
+			<h5 class="pull-left" style="margin: 0px;"><%=config.data[idx].title%></h5>
             <div class="pull-right">
-            <button class="btn btn-small btn-primary pull-right hspacer" onclick="toggleSource(<%=idx%>);">Source</button>
-            <a id="lLink<%=idx%>" href="#"><button class="btn btn-small btn-success pull-right hspacer">L</button></a>
-            <a id="mLink<%=idx%>" href="#"><button class="btn btn-small btn-warning pull-right hspacer">M</button></a>
-            <a id="sLink<%=idx%>" href="#"><button class="btn btn-small btn-danger pull-right hspacer">S</button></a>
-            <a id="gLink<%=idx%>" href="#"><button class="btn btn-small btn-info pull-right hspacer">Graphlot</button></a>
+            <div class="pull-left btn-group">
+                <a class="btn btn-small btn-success dropdown-toggle hspacer" data-toggle="dropdown" href="#"> Functions...<span class="caret"></span></a>
+                <ul class="dropdown-menu">      
+                    <li>
+                        <input id="yMin<%=idx%>" type="text" class="input-mini hspacer" placeholder="yMin">
+                        <label class="pull-right hspacer">
+                           <a target="_blank" class="label label-info pull-left" href="http://graphite.readthedocs.org/en/1.0/url-api.html"><i class="icon-question-sign"></i> Help</a>
+                        </label>
+                    </li>
+                    <li>
+                        <input id="yMax<%=idx%>" type="text" class="input-mini hspacer" placeholder="yMax">
+                    </li>
+                    <li>
+                        <input id="otherUrlParamName<%=idx%>" type="text" class="input-mini hspacer" placeholder="name">
+                        
+                        <input id="otherUrlParamValue<%=idx%>" type="text" class="input-mini hspacer" placeholder="value">
+                    </li>                    <li>
+                         <label>
+                            <button class="btn btn-small btn-primary pull-right hspacer" onclick="updateGraph(<%=idx%>);">Update</button>
+                         </label>
+                    </li>
+                </ul>
             </div>
+            <div class="pull-left btn-group">
+                <a class="btn btn-small btn-warning dropdown-toggle hspacer" data-toggle="dropdown" href="#"> Images...<span class="caret"></span></a>
+                <ul class="dropdown-menu">      
+                    <li class="navbar-text"><a id="lLink<%=idx%>" href="#">Large</a></li>
+                    <li class="navbar-text"><a id="mLink<%=idx%>" href="#">Medium</a></li>
+                    <li class="navbar-text"><a id="sLink<%=idx%>" href="#">Small</a></li>
+                </ul>
+            </div>
+            <div class="pull-right">
+                <button class="btn btn-small btn-primary pull-right hspacer" onclick="toggleSource(<%=idx%>);">Source</button>
+                <a id="gLink<%=idx%>" href="#"><button class="btn btn-small btn-info pull-right hspacer">Graphlot</button></a>
+            </div>
+            </div>
+            <br/>            
+            <a href="#" onclick="showExtendedGraph(<%=idx%>); return false;"><img id="img<%=idx%>" class="img-rounded" width="<%=config.width%>" height="<%=config.height%>"/></a>
             <br/>
-            <a id="link<%=idx%>" href=""><img id="img<%=idx%>" class="img-rounded" width="<%=config.width%>" height="<%=config.height%>"/></a>
-            <br/>
-            <div id="sourceContainer<%=idx%>"class="initial-hide">
+            <div id="sourceContainer<%=idx%>"class="hide">
                 <textarea id="source<%=idx%>" style="width:<%=config.width-10%>px" class="source"></textarea><br/>
                 <button class="btn btn-small" onclick="updateSource(<%=idx%>);">Update</button>
             </div>
@@ -47,89 +97,118 @@ $(document).ready(function() {
 	<% } %>
 <% } %>
 </script>
+<script type="text/template" id="tmpl-dashboards-menu">
+<% if(_.isEmpty(dashboardsRoot)){ %>
+    <li>
+        <a href="dashboard.html?id=<%= path %>"><%= name %></a>
+    </li>
+<% }else{ %>
+    <li class="dropdown-submenu">
+        <a tabindex="-1" href="#"><%= name %></a>
+        <ul class="dropdown-menu">
+            <% for (node in dashboardsRoot) { %>
+                <%= generateDashboardsMenu(node, path + "." + node, dashboardsRoot[node]) %>
+            <% } %>
+        </ul>
+    </li>
+<% } %> 
+</script>
 <script type="text/template" id="tmpl-toolbar">
-    <a class="brand" href="index.html">graphitus</a>
+    <a class="brand" href="index.html">&nbsp; graphitus</a>
     <ul class="nav">
-        <li class="dropdown">  
-            <a href="#" class="dropdown-toggle" data-toggle="dropdown"><%= config.title %><b class="caret"></b></a>
+        <li class="dropdown"> 
+            <a href="#" class="dropdown-toggle" data-toggle="dropdown"><%= title %><b class="caret"></b></a>
             <ul id="dashboards" class="dropdown-menu">
-                <% for (group in dashboardGroups) { %>
-                    <li class="dropdown-submenu">
-                        <a tabindex="-1" href="#"><%=group%></a>
-                        <ul class="dropdown-menu">
-                            <% for (idx in dashboardGroups[group]) { %>
-                                <li>
-                                    <a href="dashboard.html?id=<%=dashboardGroups[group][idx].id%>"><%=dashboardGroups[group][idx].id.replace(group+".", "")%></a>
-                                </li>
-                            <% } %>
-                        </ul>
+                <%= dashboardsMenu %>
+            </ul>  
+        </li>
+        <li class="navbar-text"><div><a href="#" id="permalink"><i class="icon-link"></i> </a></div></li>
+        <li class="divider-vertical"></li>
+        <li>
+            <form class="navbar-search form-inline pull-right">
+                <input id="search" type="text" style="margin-top: 0px;" class="search-query input-small" placeholder="Search" />
+            </form>
+        </li>
+        <li class="divider-vertical"></li>
+        <li class="navbar-text"><i class="icon-time"></i> Back</li>
+        <li class="divider-vertical"></li>
+        <li><input placeholder="back" type="text" class="input-mini" style="width: 30px;" id="timeBack" name="timeBack" value="<%= (config.timeBack) ? config.timeBack : "" %>" onchange="useHours()" /></li>
+        <li class="divider-vertical"></li>
+        <li class="navbar-text"> <strong>OR</strong> </li>
+        <li class="divider-vertical"></li>
+        <li class="navbar-text"><i class="icon-calendar"></i> Dates </li>
+        <li class="divider-vertical"></li>
+        <li><input type="text" class="input-small" placeholder="start date" id="start" name="start" value="<%= (config.from) ? config.from : ""%>" onchange="useDateRange()" /></li>
+        <li class="divider-vertical"></li>
+        <li><input type="text" class="input-small" placeholder="end date" id="end" name="end" value="<%=(config.until) ? config.until : ""%>" onchange="useDateRange()" /></li>
+        <li class="divider-vertical"></li>
+        <li class="dropdown">
+           <a href="#" class="dropdown-toggle" data-toggle="dropdown"><i class="icon-cog"></i> Options<b class="caret"></b></a>
+           <ul id="options" class="dropdown-menu" style="width: 200px;">
+                    <li>
+                    <label class="checkbox" style="margin: 10px">
+                        <input type="checkbox" id="average" name="average" <% if(config.averageSeries) { %>checked="checked"<% } %> onchange="updateGraphs()" />Average Series
+                    </label>
                     </li>
-                <% } %> 
+                    <li>
+                    <label class="checkbox" style="margin: 10px">
+                        <input type="checkbox" id="sum" name="sum" <% if(config.sumSeries) { %>checked="checked"<% } %> onchange="updateGraphs()" />Sum Series
+                    </label>
+                    </li>
+                    <li class="divider"></li>
+                    <li> 
+                    <label class="checkbox" style="margin: 10px">
+                        <input type="checkbox" id="legend" name="legend" <% if(config.legend) {%> checked="checked" <% } %> onchange="updateGraphs()" /> Show Legend
+                    </label>
+                    </li>
+                    <li>
+                    <label class="checkbox" style="margin: 10px">
+                        <input type="checkbox" id="refresh" name="refresh" <% if(config.refresh) { %>checked="checked"<% } %> onchange="toggleAutoRefresh();" />Auto Refresh
+                    </label>
+                    </li>
+                    <li class="divider"></li>
+                    <li>
+                    <label class="select" style="margin-left: 10px;"> Time Zone: </label>
+                    <div class="pull-right" style="margin-right: 10px;margin-bottom: 10px;">
+                        <select id="tz" onchange="setTimezone();" name="tz" class="input input-medium" style="margin-top: 0px;">
+                            <option value="US/Eastern" selected="selected">US/Eastern</option>
+                            <option value="US/Central">US/Central</option>
+                            <option value="US/Pacific">US/Pacific</option>
+                            <option value="Israel">Israel</option>
+                            <option value="Europe/London">Europe/London</option>
+                        </select>
+                    </div>
+                    </li>
             </ul>  
         </li>
         <li class="divider-vertical"></li>
         <li>
-            <form class="navbar-search form-inline pull-right">
-              <input id="search" type="text" style="margin-top: 0px;" class="search-query input-mini" placeholder="Search">
-            </form>
-        </li>
-        <li class="divider-vertical"></li>
-        <li class="navbar-text">Back</li>
-        <li class="divider-vertical"></li>
-        <li><input placeholder="go back" type="text" class="input-mini" id="timeBack" name="timeBack" value="<%=config.timeBack%>" onchange="useHours()" /></li>
-        <li class="divider-vertical"></li>
-        <li class="navbar-text"> <strong>OR</strong> </li>
-        <li class="divider-vertical"></li>
-        <li class="navbar-text"> Date Range </li>
-        <li class="divider-vertical"></li>
-        <li><input type="text" class="input-small" placeholder="start date" id="start" name="start" value="<%=config.from%>" onchange="useDateRange()" /></li>
-        <li class="divider-vertical"></li>
-        <li><input type="text" class="input-small" placeholder="end date" id="end" name="end" value="<%=config.until%>" onchange="useDateRange()" /></li>
-        <li class="divider-vertical"></li>
-        <li> 
-        <label class="checkbox" style="margin-top: 10px">
-            <input type="checkbox" id="legend" name="legend" <% if(config.legend) {%> checked="checked" <% } %> onchange="updateGraphs()" /> Legend
-        </label>
-        </li>
-        <li class="divider-vertical"></li>
-        <li>
-            <label class="checkbox" style="margin-top: 10px">
-                <input type="checkbox" id="average" name="average" <% if(config.averageSeries) { %>checked="checked"<% } %> onchange="updateGraphs()" /> Average Series
-            </label>
-        </li>
-        <li class="divider-vertical"></li>
-        <li>
-            <label class="checkbox" style="margin-top: 10px">
-                <input type="checkbox" id="refresh" name="refresh" <% if(config.refresh) { %>checked="checked"<% } %> onchange="toggleAutoRefresh();" /> Auto Refresh
-            </label>
-        </li>
-        <li class="divider-vertical"></li>
-        <li>
-            <button class="btn btn-small btn-primary pull-right hspacer" style="margin-top:8px" onclick="updateGraphs();return false;">Update</button>
+            <button class="btn btn-small btn-primary pull-right hspacer" style="margin-top:8px" onclick="updateGraphs();return false;"><i class="icon-circle-arrow-right"></i> Update</button>
         </li>
         <li class="divider-vertical"></li>
         <li>
             <div id="loadingProgress" class="progress progress-striped active" style="width: 100px;margin: 10px">
-                <div class="bar" style="width: 100%;">Updating... </div>
+                <div class="bar" style="width: 100%;"><i class="icon-refresh icon-spin"></i> Updating... </div>
             </div>
+            <div id="refreshCounter" class="navbar-text"></div>
         </li>
-        <li class="divider-vertical"></li>
-        <li id="refreshCounter" class="navbar-text"></li>
     </ul>
 </script>
 <script type="text/template" id="tmpl-parameter-sel">
-    <li class="navbar-text"><%= group %>: </li>
-    <li class="divider-vertical"></li>
+    <li class="navbar-text"><%= group %> <i class="icon-chevron-right"></i> </li>
     <li>
-    <select id="<%= group %>" name="<%= group %>" onchange="updateGraphs(); return false;" class="input-medium">
-        <% $.each(params, function(paramName, param) { %>
-            <% var value = ((typeof param) === 'object') ? paramName : param %>
-            <% var selectedHtml = (selected && selected != "" && selected === value) ? "selected='selected'" : "" %>
-            <option value="<%= value %>" <%= selectedHtml %>><%= value %></option>
-        <% }); %>
-    </select>
+        <div style="margin-top:5px;">
+            &nbsp; <select id="<%= group %>" name="<%= group %>" class="input input-large"></select>
+        </div>
     </li>
     <li class="divider-vertical"></li>
+</script>
+<script type="text/template" id="tmpl-parameter-sel-item">
+    <% for(paramName in params){ %>
+        <% var value = ( typeof params[paramName][group] === "undefined") ? paramName : params[paramName][group]; %>
+        <% var selectedHtml = (selected && selected != "" && (selected === value || selected === paramName) ) ? "selected='selected'" : "" %>
+        <option value="<%= value %>" <%= selectedHtml %>><%= paramName %></option>
+    <% } %>
 </script>
 <script type="text/template" id="tmpl-warning-dashboard">
 <div class="alert alert-block">
@@ -147,22 +226,116 @@ $(document).ready(function() {
         </form>
       </div>
     </div>
-    <div style="margin-top: 52px;"></div>
-    <div id="parametersNavBar" class="navbar navbar-inverse">
+    <div style="margin-top: 48px;"></div>
+    <div id="parameters-toolbar" class="navbar navbar-inverse">
       <div class="navbar-inner">
         <form class="navbar-form form-inline">
             <ul class="nav" id="parametersToolbar" >
-            </ul>
+            </ul> 
         </form>
       </div>
     </div>
-    <div id="message" class="initial-hide"></div>
+    <div id="message" class="hide"></div>
     <center>
         <div id="loader" class="progress progress-striped active" style="width: 30%;">
-          <div class="bar" style="width: 100%;"></div>
+          <div id="progressBar" class="bar" style="width: 100%;">Loading Dashboard...</div>
         </div>
-    </center>
+    </center>          
     <div id="dashboards-view" class="container" style="width: 100%">
-    </div>            
+    </div>
+    
+	<div id="extendedGraph" class="lightbox hide fade" tabindex="-1" role="dialog" aria-hidden="true">
+	    <div class='lightbox-header'>
+	        <button type="button" class="close" data-dismiss="lightbox" aria-hidden="true">&times;</button>
+	    </div>
+		<div class='lightbox-content'>
+			<div class="navbar navbar-inverse">
+				<div class="navbar-inner">
+						<ul class="nav">
+							<li><label class="navbar-text" id="extendedGraphTitle"></label></li>
+							<li class="divider-vertical"></li>
+							<li class="dropdown"><a href="#" class="dropdown-toggle" data-toggle="dropdown"><i class="icon-bar-chart"></i> Options<b class="caret"></b></a>
+								<ul class="dropdown-menu" style="width: 400px;text-align: left;">
+								    <div style="margin-left: 10px;">
+									   <form id="extendedChartOptionsForm" style="width: 400px;padding-bottom: 0px;">
+									        <h1>Chart Options</h1>
+									        <section>
+									            <div id="renderer_form" class="toggler">
+									                <input type="radio" name="renderer" id="area" value="area" checked>
+									                <label for="area">area</label>
+									                <input type="radio" name="renderer" id="bar" value="bar">
+									                <label for="bar">bar</label>
+									                <input type="radio" name="renderer" id="line" value="line">
+									                <label for="line">line</label>
+									                <input type="radio" name="renderer" id="scatter" value="scatterplot">
+									                <label for="scatter">scatter</label>
+									            </div>
+									        </section>
+									        <section>
+									            <div id="offset_form">
+									                <label for="stack">
+									                    <input type="radio" name="offset" id="stack" value="zero" checked>
+									                    <span>stack</span>
+									                </label>
+									                <label for="stream">
+									                    <input type="radio" name="offset" id="stream" value="wiggle">
+									                    <span>stream</span>
+									                </label>
+									                <label for="pct">
+									                    <input type="radio" name="offset" id="pct" value="expand">
+									                    <span>pct</span>
+									                </label>
+									                <label for="value">
+									                    <input type="radio" name="offset" id="value" value="value">
+									                    <span>value</span>
+									                </label>
+									            </div>
+									            <div id="interpolation_form">
+									                <label for="cardinal">
+									                    <input type="radio" name="interpolation" id="cardinal" value="cardinal" checked>
+									                    <span>cardinal</span>
+									                </label>
+									                <label for="linear">
+									                    <input type="radio" name="interpolation" id="linear" value="linear">
+									                    <span>linear</span>
+									                </label>
+									                <label for="step">
+									                    <input type="radio" name="interpolation" id="step" value="step-after">
+									                    <span>step</span>
+									                </label>
+									            </div>
+									        </section>
+									        <section>
+									            <h6>Smoothing</h6>
+                                                    <div id="smoother" style="width: 80%; padding-left: 5px;"></div>
+									        </section>
+									        <section><span class="trademark">powered by <a href="http://code.shutterstock.com/rickshaw/" target="_blank">rickshaw</a></span></section>
+									    </form>
+									  </div>
+								</ul>
+							</li>
+                            <li style="width: 400px;">
+                                <div id="lightboxProgress" class="progress progress-striped active" style="margin-top: 10px;">
+                                    <div class="bar" id="lightboxProgressText" style="width: 100%;"></div>
+                                </div>
+                            </li>
+                            <li>
+                                <label class="hide label label-warning" style="margin-top: 10px;" id="lightboxProgressWarningWarning"></label>
+                            </li>
+						</ul>
+				</div>
+			</div>
+			<div style="padding: 20px;">
+				<div class="pull-left">
+					<div id="extendedChart"></div>
+					<div id="timeline"></div>
+					<div id="slider" style="margin-top: 30px;"></div>
+				</div>
+				<div class="pull-right">
+					<div style="padding-right: 3px; width: 170px;" id="extendedLegend"></div>
+				</div>
+			</div>
+		</div>
+	</div>
 </body>
 </html>

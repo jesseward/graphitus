@@ -6,24 +6,53 @@ var config = null;
 var autoRefreshEnabled = false;
 var dashboards = new Array();
 var searchIndex = new Array();
+var parameterDependencies = new Array();
+var dynamicParams = new Array();
+var rawTargets = new Array();
 
 function renderGraphitus(){
+	$('#dashboards-view').hide();
+	$('#parameters-toolbar').hide();
 	loadDashboards();
+}
+
+function generateDashboardsMenu(name, path, dashboardsRoot){
+	var tmplDashboardsMenu = $('#tmpl-dashboards-menu').html();
+	return _.template(tmplDashboardsMenu, {
+		dashboardsRoot : dashboardsRoot,
+		name: name,
+		path: path
+	});
+}
+
+function generateDashboardsMenus(){
+	var result = "";
+	for(idx in dashboards){
+		result += generateDashboardsMenu(idx, idx, dashboards[idx]);
+	}
+	return result;
 }
 
 function renderView() {
 	renderParamToolbar();
 	var tmplToolbarMarkup = $('#tmpl-toolbar').html();
 	var tmplDashboardViewMarkup = $('#tmpl-dashboards-view').html();
+	var dashboardsMenu = generateDashboardsMenus();
+	var title = (config.title.length < 15) ? config.title : config.title.substring(0,15) + "...";
 	$("#toolbar").append(_.template(tmplToolbarMarkup, {
 		config : config, 
-		dashboardGroups : dashboards
+		title: title,
+		dashboardsMenu : dashboardsMenu
 	}));
+	loadTimezone();
 	initializeSearch();
 	console.log("rendered toolbar");
 	$("#dashboards-view").append(_.template(tmplDashboardViewMarkup, {
 		config : config
 	}));
+	$('.dropdown-menu input, .dropdown-menu label, .dropdown-menu select').click(function(e) {
+	    e.stopPropagation();
+	});
 	console.log("rendered dashboard view");
 }
 
@@ -32,18 +61,17 @@ function loadView() {
 	toggleAutoRefresh();
 	renderSource();
 	document.title = config.title + " Dashboard";
-	if(config.theme){
-		$('head').append(
-			'<link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootswatch/2.1.1/' + config.theme
-					+ '/bootstrap.min.css" type="text/css" />');
-	}
 	$("#start").datetimepicker({
 		timeFormat : 'hh:mm',
-		dateFormat : 'yymmdd'
+		dateFormat : 'yymmdd',
+		hourGrid: 4,
+		minuteGrid: 10
 	});
 	$("#end").datetimepicker({
 		timeFormat : 'hh:mm',
-		dateFormat : 'yymmdd'
+		dateFormat : 'yymmdd',
+		hourGrid: 4,
+		minuteGrid: 10
 	});
 }
 
@@ -54,6 +82,7 @@ function loadDashboard() {
 		type : "get",
 		url : dashboardUrl,
 		dataType : 'json',
+		cache: false,
 		success : function(data) {
 			if(data.error){
 				alert("No dashboard information "+dashId);
@@ -61,6 +90,7 @@ function loadDashboard() {
 			}
 			console.log("fetched [" + dashboardUrl + "]");
 			config = data;
+
 			//backward compatibility
 			if(!config.timeBack){
 				config.timeBack = config.hoursBack+'h';
@@ -72,6 +102,8 @@ function loadDashboard() {
 			console.log("rendered view");
 			loadView();
 			console.log("view loaded");
+			$("#loader").hide();
+			$('#dashboards-view').show();
 		},
 		error : function(xhr, ajaxOptions, thrownError) {
 			console.log("error [" + dashboardUrl + "]");
@@ -80,6 +112,7 @@ function loadDashboard() {
 				dashboardId : dashId
 			}));
 			$('#message').show();
+			$("#loader").hide();
 		}
 	});
 }
@@ -87,7 +120,8 @@ function loadDashboard() {
 function updateGraphs() {
 	console.log("Updating graphs, start time: " + lastUpdate);
 	showProgress();
-	
+
+	$("#permalink").attr("href", generatePermalink());
 	for ( var i = 0; i < config.data.length; i++) {
 		updateGraph(i);
 	}
@@ -102,17 +136,17 @@ function updateGraphs() {
 
 function updateGraph(idx){
 	var graph = config.data[idx];
-	$('#link' + idx).attr('href', buildUrl(graph, graph.title, config.width*2, config.height*2, "render"));
-	$('#sLink' + idx).attr('href', buildUrl(graph, graph.title, config.width/2, config.height/2, "render"));
-	$('#mLink' + idx).attr('href', buildUrl(graph, graph.title, config.width, config.height, "render"));
-	$('#lLink' + idx).attr('href', buildUrl(graph, graph.title, config.width*2, config.height*2, "render"));
-	$('#gLink' + idx).attr('href', buildUrl(graph, graph.title, 0, 0, "graphlot"));
-	$('#img' + idx).attr('src', buildUrl(graph, "", config.width, config.height, "render"));
+	$('#sLink' + idx).attr('href', buildUrl(idx, graph, graph.title, config.width/2, config.height/2, "render"));
+	$('#mLink' + idx).attr('href', buildUrl(idx, graph, graph.title, config.width, config.height, "render"));
+	$('#lLink' + idx).attr('href', buildUrl(idx, graph, graph.title, config.width*2, config.height*2, "render"));
+	$('#gLink' + idx).attr('href', buildUrl(idx, graph, graph.title, 0, 0, "graphlot"));
+	$('#img' + idx).attr('src', buildUrl(idx, graph, "", config.width, config.height, "render"));
+	rawTargets[idx] = buildUrl(idx, graph, graph.title, config.width, config.height, "render");
 	$('#source' + idx).val(getGraphSource(graph));
 }
 
-function buildUrl(graph, chartTitle, width, height, graphiteOperation) {
-	var params = "&lineWidth=" + config.defaultLineWidth + "&title=" + encodeURIComponent(chartTitle);
+function buildUrl(idx, graph, chartTitle, width, height, graphiteOperation) {
+	var params = "&lineWidth=" + config.defaultLineWidth + "&title=" + encodeURIComponent(chartTitle) + "&tz=" + $("#tz").val();
 	params += (graph.params) ? "&" + graph.params : "";
 
 	var range = "";
@@ -127,49 +161,222 @@ function buildUrl(graph, chartTitle, width, height, graphiteOperation) {
 		range = "&from=" + startParts[1] + "_" + startParts[0] + "&until=" + endParts[1] + "_" + endParts[0];
 	}
 
-	var legend = "&hideLegend=" + !($("#legend").attr('checked'));
+	var legend = "&hideLegend=" + !($("#legend").prop('checked'));
 	var size = "&width=" + width + "&height=" + height;
 
 	targetUri = "";
 	var targets = (typeof graph.target == 'string') ? new Array(graph.target) : graph.target;
 	for (i = 0; i < targets.length; i++) {
-		if ($("#average").attr('checked')) {
-			targetUri = targetUri + "target=averageSeries(" + encodeURIComponent(applyParameters(targets[i])) + ")";
+		var effectiveTarget = encodeURIComponent(calculateEffectiveTarget(targets[i]));
+		
+		if ($("#average").prop('checked')) {
+			targetUri = targetUri + "target=averageSeries(" + effectiveTarget + ")";
+		}else if ($("#sum").prop('checked')) {
+			targetUri = targetUri + "target=sumSeries(" + effectiveTarget + ")";
 		} else {
-			targetUri = targetUri + "target=" + encodeURIComponent(applyParameters(targets[i]));
+			targetUri = targetUri + "target=" + effectiveTarget;
 		}
 		if (i < targets.length - 1) {
 			targetUri = targetUri + "&";
 		}
 	}
+	var userUrlParams = getUserUrlParams(idx);
 
-	return graphitusConfig.graphiteUrl + "/" + graphiteOperation + "/" + "?" + targetUri + range + legend + params + size;
+	return graphitusConfig.graphiteUrl + "/" + graphiteOperation + "/?" + targetUri + range + legend + params + userUrlParams + size;
+}
+
+function getUserUrlParams(idx){
+	var userUrlParams ="";
+	userUrlParams += ($("#yMin"+idx).val() !="") ? "&yMin=" + $("#yMin"+idx).val() : "";
+	userUrlParams += ($("#yMax"+idx).val() !="") ? "&yMax=" + $("#yMax"+idx).val() : "";
+	userUrlParams += ($("#otherUrlParamName"+idx).val() !="" && $("#otherUrlParamValue"+idx).val() !="") ? "&"+$("#otherUrlParamName"+idx).val() +"=" + $("#otherUrlParamValue"+idx).val() : "";
+	return userUrlParams;
+}
+
+function calculateEffectiveTarget(target){
+	return applyParameters(target);
 }
 
 function renderParamToolbar(){
 	if(config.parameters){
-		var tmplParamSel = $('#tmpl-parameter-sel').html();
-
 		$.each(config.parameters, function(paramGroupName, paramGroup) {
+			var tmplParamSel = $('#tmpl-parameter-sel').html();
 			$("#parametersToolbar").append(_.template(tmplParamSel, {
-				group : paramGroupName,
-				params: paramGroup,
-				selected: queryParam(paramGroupName)
+				group : paramGroupName
 			}));
-		});		
-	}else{
-		$('#parametersNavBar').hide();
+			$("#"+paramGroupName).select2({
+				 placeholder: "Loading " + paramGroupName
+			});
+		    if(paramGroup.type && paramGroup.type == "dynamic"){
+				 dynamicParams[paramGroupName] = paramGroup;
+				 loadParameterDependencies(paramGroupName, paramGroup.query);
+				 renderDynamicParamGroup(paramGroupName, paramGroup);
+			}else{
+				renderValueParamGroup(paramGroupName, paramGroup);
+			}
+		});	
+		$('#parameters-toolbar').show();
 	}
+}
+
+function generatePermalink(){
+	var href = "dashboard.html?id=" + queryParam("id");
+	href = href + "&legend=" + $("#legend").prop('checked');
+	href = href + "&average=" + $("#average").prop('checked');
+	href = href + "&sum=" + $("#sum").prop('checked');
+	var timeBack = $('#timeBack').val();
+	var start = $('#start').val();
+	var end = $('#end').val();
+	if (timeBack != "") {
+		href = href + "&timeBack=" + timeBack;
+	} else if (start != "" && end != "") {
+		href = href + "&start=" + start + "&end=" + end;
+	}
+	
+	if(config.parameters){
+		$.each(config.parameters, function(paramGroupName, paramGroup) {
+			var selectedParamText = $('#'+paramGroupName +" option[value='"+$('#'+paramGroupName).val()+"']").text();
+			var group = $(this).attr("id");
+			href = href + "&" + paramGroupName + "=" + encodeURIComponent(selectedParamText);
+		});
+	}
+	return href;
+}
+
+function renderValueParamGroup(paramGroupName, paramGroup){
+	var tmplParamSelItem = $('#tmpl-parameter-sel-item').html();
+	$("#"+paramGroupName).html("");
+	$("#"+paramGroupName).append(_.template(tmplParamSelItem, {
+		group : paramGroupName,
+		params: paramGroup,
+		selected: getDefaultValue(paramGroupName)
+	}));
+	$("#"+paramGroupName).select2({
+		 placeholder: "Select a " + paramGroupName
+	});
+	 $("#"+paramGroupName).on("change", function(e) { 
+		 updateDependantParameters(paramGroupName);
+		 updateGraphs();
+	 });
+}
+
+function getDefaultValue(paramGroupName){
+	if(queryParam(paramGroupName)){
+		return queryParam(paramGroupName);
+	}else if(dynamicParams[paramGroupName] && dynamicParams[paramGroupName].defaultValue){
+		return dynamicParams[paramGroupName].defaultValue;
+	}else{
+		return "";
+	}
+}
+
+function updateDependantParameters(paramGroupName){
+	var dependencies = parameterDependencies[paramGroupName]; 
+	 if(dependencies){
+		 for(idx in dependencies){
+			 var dep = dependencies[idx];
+			 var paramGroup = dynamicParams[dep];
+			 if(paramGroup.type && paramGroup.type == "dynamic"){
+				 renderDynamicParamGroup(dep, paramGroup);					 
+			 }
+		 }
+	 }
+}
+
+function loadParameterDependencies(paramGroupName, path){
+	var dependencies = getDependenciesFromPath(path);
+	for(idx in dependencies){
+		if(!parameterDependencies[dependencies[idx]]){
+			parameterDependencies[dependencies[idx]] = new Array();
+		}
+		parameterDependencies[dependencies[idx]].push(paramGroupName);
+	}
+}
+
+function getDependenciesFromPath(path){
+	var dependencies =  new Array();
+	path.replace(/\{(.*?)\}/g, function(g0,g1){
+		dependencies.push(g1);
+	});
+	return dependencies;
+}
+
+function generateDynamicQuery(paramGroupName){
+	var query = dynamicParams[paramGroupName].query;
+	var dependencies = getDependenciesFromPath(query);
+	for(idx in dependencies){
+		var dependsOn = dependencies[idx];
+		dependValue = $('#'+dependsOn).val();
+		if(!dependValue){
+			dependValue = "*";
+		}
+		query = applyParameter(query, dependsOn, dependValue);
+	}
+	return query;
+}
+
+function renderDynamicParamGroup(paramGroupName, paramGroup){
+	var url = graphitusConfig.graphiteUrl +"/metrics/find?format=completer&query=";
+	var query = generateDynamicQuery(paramGroupName);
+	$.ajax({
+	    type: 'GET',
+	    url: url+query +".*",
+	    dataType: 'json',
+	    success: function(data) { 
+	    	var parameters = new Array();
+	    	if(paramGroup.showAll){
+	    		parameters["All"] = new Array();
+	    		parameters["All"][paramGroupName] = new Array();
+	    		parameters["All"][paramGroupName] = "*";
+	    	}
+	    	$.each(data.metrics, function(i, metric) {
+	    		var paramValue = getParamValueFromPath(paramGroup, metric);
+	    		parameters[paramValue] = new Array();
+	    		parameters[paramValue][paramGroupName] = new Array();
+	    		parameters[paramValue][paramGroupName] = paramValue;
+	    	});
+	    	config.parameters[paramGroupName] = parameters;
+			renderValueParamGroup(paramGroupName, parameters);
+	    },
+	    async: false
+	});
+}
+
+function getParamValueFromPath(paramGroup, metric){
+	var result ="";
+
+	if(paramGroup.index){
+		var pathParts = metric.path.split(".");
+		result =  pathParts[paramGroup.index];
+	}else{
+		result =  metric.name;
+	}
+
+	return applyRegexToName(paramGroup, result);
+}
+
+function applyRegexToName(paramGroup, metric){
+	var result = metric;
+	if(paramGroup.regex){
+		var regexResult = result.match(new RegExp(paramGroup.regex));
+		result = (regexResult) ? regexResult[1] : "";
+	}
+	return result;
 }
 
 function applyParameters(target){
 	if(config.parameters){
 		$.each(config.parameters, function(paramGroupName, paramGroup) {
-			var selectedParamValue = $('#'+paramGroupName).val();
-			$.each(paramGroup[selectedParamValue], function(tokenKey, tokenValue) {
+			var selectedParamText = $('#'+paramGroupName +" option[value='"+$('#'+paramGroupName).val()+"']").text();
+			for(tokenKey in paramGroup[paramGroupName]){
+				var tokenValue = paramGroup[paramGroupName][tokenKey];
 				target = applyParameter(target, tokenKey, tokenValue);
-			});
-	    });	
+			}
+			for(tokenKey in paramGroup[selectedParamText]){
+				var tokenValue = paramGroup[selectedParamText][tokenKey];
+				target = applyParameter(target, tokenKey, tokenValue);
+			}
+	    });
 	}
 	return target;
 }
@@ -205,7 +412,7 @@ function disableAutoRefresh() {
 
 function updateRefreshCounter() {
 	var remaining = config.refreshIntervalSeconds - Math.floor(((new Date().getTime()) - lastUpdate.getTime()) / 1000);
-	$("#refreshCounter").html('<label class="badge badge-success">graphs will update in ' + remaining + ' seconds<br/>' +"</label>");
+	$("#refreshCounter").html('<label class="badge badge-success">update in ' + remaining + 's<br/>' +"</label>");
 }
 
 function showProgress() {
@@ -289,6 +496,9 @@ function mergeUrlParamsWithConfig(config){
 	if(queryParam('averageSeries') != null){
 		config.averageSeries = queryParam('averageSeries');
 	}
+	if(queryParam('sumSeries') != null){
+		config.sumSeries = queryParam('sumSeries');
+	}
 	if(queryParam('defaultLineWidth') != null){
 		config.defaultLineWidth = queryParam('defaultLineWidth');
 	}
@@ -297,10 +507,10 @@ function mergeUrlParamsWithConfig(config){
 function getGraphSource(graph){
 	var result = new Array();
 	if((typeof graph.target) === 'string') { 
-		result.push(applyParameters(graph.target));
+		result.push(calculateEffectiveTarget(graph.target));
 	}else{
 		for(idx in graph.target){
-			result.push(applyParameters(graph.target[idx]));
+			result.push(calculateEffectiveTarget(graph.target[idx]));
 		}
 	}
 	return result.join("\n");
@@ -333,17 +543,14 @@ function loadDashboards(){
         url: graphitusConfig.dashboardListUrl,
         dataType:'json',
         success: function(json) {
-            console.log("Loaded dashboards: " + JSON.stringify(json));
+            console.log("Loaded "+json.rows.length+" dashboards");
             var data = json.rows;
+
+            var tree = new Graphitus.Tree();
             for(var i=0; i<data.length; i++){
-                var group = data[i].id.split('.')[0];
-                if(!dashboards[group]){
-                    dashboards[group] = new Array();
-                }
-                dashboards[group].push( data[i] );
+            	tree.add(data[i].id);
             }
-            dashboards.sort();
-            $("#loader").hide();
+            dashboards = tree.getRoot();
 			for(i in json.rows){
 				searchIndex.push(json.rows[i].id);
 			}
@@ -356,7 +563,6 @@ function loadDashboards(){
 }
 
 function initializeSearch(){
-	console.log("initialize search: " + JSON.stringify(searchIndex));
 	$('#search').typeahead({
 		source: searchIndex,
 		updater: function (selection) {
@@ -364,3 +570,25 @@ function initializeSearch(){
 		}
 	});
 }
+
+function setTimezone(){
+	console.log("timezone set: " + $("#tz").val());
+	$.cookie('graphitus.timezone', $("#tz").val());
+}
+
+function loadTimezone(){
+	var tz = $.cookie('graphitus.timezone');
+	if(tz && tz !== ""){
+		console.log("timezone loaded: " + tz);
+		$("#tz").val($.cookie('graphitus.timezone'));		
+	}
+}
+
+function showExtendedGraph(idx){
+	$(".lightbox-content").css("width",$(window).width()-100);
+	$(".lightbox-content").css("height", $(window).height()-100);
+	$('#extendedGraph').lightbox({resizeToFit:false});
+	loadExtendedGraph(rawTargets[idx]);
+	$("#extendedGraphTitle").text(config.title + " - " + config.data[idx].title);
+}
+
